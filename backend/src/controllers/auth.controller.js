@@ -2,6 +2,23 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+export const protect = async (req, res, next) => {
+    const token = req.cookies.accessToken;
+
+    if (!token) return res.sendStatus(401);
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        const user = await User.findById(decoded.id).select("-password");
+        if (!user) return res.sendStatus(401);
+
+        req.user = user;
+        next();
+    } catch (err) {
+        return res.sendStatus(403);
+    }
+};
 
 export const register = async (req, res) => {
     try {
@@ -147,7 +164,7 @@ try{
         sameSite:  "none",
         maxAge: 7 * 24 * 60 * 60 * 1000
     })
-    
+
     res.json({ message: "Token refreshed" })
 }
 
