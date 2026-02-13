@@ -58,26 +58,131 @@ export const login = async(req, res) => {
             return res.status(401).json({ message: "Invalid creadentials"})
         }
 
-        const token = jwt.sign(
-            { id: user._id},
+        const accessToken = jwt.sign(
+            { id: user._id,  role: user.role},
             process.env.JWT_SECRET,
-            { expiresIn: "1d" }
+            { expiresIn: "15m" }
+        );
+
+        const refreshToken = jwt.sign(
+            { id: user._id },
+            process.env.JWT_REFRESH_SECRET,
+            { expiresIn: "7d" }
         )
 
-        res.json({
-            token,
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role
-            }
-        })
+        const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+
+        user.refreshToken = hashedRefreshToken;
+        await user.save();
+
+
+       res.cookie("accessToken", accessToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 15 * 60 * 1000
+       });
+
+       res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000
+       });
+
+       res.json({ user })
+
     } catch (error) {
         res.status(500).json({ message: "Login failed" })
     }
     
 }
+
+export const  refresh = async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) return res.sendStatus(401)
+        
+    let decoded;
+
+try{
+     decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+} catch (err) {
+    return res.sendStatus(403)
+}
+
+    const user = await User.findById(decoded.id)
+    if (!user || !user.refreshToken) return res.sendStatus(403)
+
+
+    const isMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+    if (!isMatch) return res.sendStatus(403)
+
+
+    const newAccessToken = jwt.sign(
+        { id: user._id, role: user.role },
+         process.env.JWT_SECRET,
+        { expiresIn: "15m" } 
+    );
+
+    const newRefreshToken = jwt.sign(
+        { id: user._id },
+        process.env.JWT_REFRESH_SECRET,
+        { expiresIn: "7d"}
+    )
+
+    const hashedRefreshToken = await bcrypt.hash(newRefreshToken, 10);
+    user.refreshToken = hashedRefreshToken;
+    await user.save();
+
+    res.cookie("accessToken", newAccessToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 15 * 60 * 1000
+    });
+
+    res.cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite:  "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    })
+    
+    res.json({ message: "Token refreshed" })
+}
+
+
+export const logout = async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+
+
+    if (!refreshToken) {
+       res.clearCookie("accessToken")
+       res.clearCookie("refreshToken")
+
+       return res.json({ message: "Logged out" })
+    }
+
+    let decoded;
+
+      try{
+         decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+      } catch (err) {
+        res.clearCookie("accessToken")
+        res.clearCookie("refreshToken")
+        return res.json({ message: "Logged out" })
+      }
+
+        await User.findByIdAndUpdate(decoded.id, { refreshToken: null });
+
+        res.clearCookie("accessToken")
+        res.clearCookie("refreshToken")
+
+        res.json({ message: "Logged out" })
+    }
+
+    
+
 
 export const getMe = async (req, res) => {
     res.json(req.user);

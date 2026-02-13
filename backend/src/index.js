@@ -1,11 +1,11 @@
-
 import dotenv from "dotenv"
 dotenv.config();
 
 import express from "express"
 import mongoose  from "mongoose"
 import cors from "cors"
-
+import cookieParser from "cookie-parser"
+import rateLimit from "express-rate-limit"
 
 // routes 
 import authRoutes from "./routes/auth.routes.js"
@@ -14,15 +14,28 @@ import leadRoutes from "./routes/lead.routes.js"
 import dashboardRoutes from "./routes/dashboard.routes.js"
 import interactionRoutes from "./routes/interaction.routes.js";
 import taskRoutes from "./routes/task.routes.js"
+import helmet from "helmet"
 
 const app =  express();
 
-// middleware 
-app.use(cors());
+// middleware
+app.set("trust proxy", 1);
+app.use(helmet());
+app.use(cookieParser());
+app.use(cors({
+    origin: "https://earnest-syrniki-55a7d6.netlify.app",
+    credentials: true
+}));
 app.use(express.json());
 
-// import testRoutes from "./routes/test.routes.js"
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: "Too many login attemps"
+})
 
+// import testRoutes from "./routes/test.routes.js"
+app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/leads", leadRoutes)

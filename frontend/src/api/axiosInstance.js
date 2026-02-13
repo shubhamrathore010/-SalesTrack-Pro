@@ -1,5 +1,7 @@
 import axios from "axios";
 
+axios.defaults.withCredentials = true;
+
 const instance = axios.create({
   baseURL: 
     "https://salestrack-pro.onrender.com/api",
@@ -9,17 +11,5 @@ const instance = axios.create({
     "Content-Type": "application/json",
   },
 })
-
-// Attach token automatically
-
-instance.interceptors.request.use(config => {
-    const token = localStorage.getItem("token");
-
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-},
-(error) => Promise.reject(error))
 
 export default instance;
